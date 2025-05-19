@@ -1,0 +1,299 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Modelos para o sistema LuminaCare
+
+model User {
+  id             String   @id @default(uuid())
+  name           String
+  email          String   @unique
+  password       String
+  role           UserRole @default(PROFESSIONAL)
+  organizationId String
+  settings       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  medicalRecords MedicalRecord[]
+  professional   Professional?
+
+  @@index([organizationId])
+}
+
+enum UserRole {
+  ADMIN
+  PROFESSIONAL
+  RECEPTIONIST
+}
+
+model Organization {
+  id           String   @id @default(uuid())
+  name         String
+  subscription Json?
+  settings     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users           User[]
+  patients        Patient[]
+  appointments    Appointment[]
+  medicalRecords  MedicalRecord[]
+  chatbotSessions ChatbotSession[]
+  services        Service[]
+  categories      Category[]
+  professionals   Professional[]
+  leads           Lead[]
+}
+
+model Patient {
+  id               String   @id @default(uuid())
+  organizationId   String
+  name             String
+  phone            String
+  email            String?
+  dateOfBirth      DateTime
+  gender           String?
+  cpf              String?  @unique
+  rg               String?
+  address          Json?
+  emergencyContact Json?
+  insuranceInfo    Json?
+  medicalInfo      Json?
+  customFields     Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  appointments   Appointment[]
+  medicalRecords MedicalRecord[]
+
+  @@index([organizationId])
+}
+
+model Lead {
+  id               String   @id @default(uuid())
+  organizationId   String
+  name             String
+  phone            String
+  email            String?
+  dateOfBirth      DateTime
+  gender           String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  sessionId        String?  
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+model Appointment {
+  id             String            @id @default(uuid())
+  organizationId String
+  professionalId String
+  patientId      String
+  scheduledDate  DateTime
+  duration       Int // duração em minutos
+  status         AppointmentStatus @default(SCHEDULED)
+  type           String?
+  notes          String?
+  createdVia     String?
+  serviceId      String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id])
+  patient       Patient        @relation(fields: [patientId], references: [id])
+  medicalRecord MedicalRecord?
+  service       Service?       @relation(fields: [serviceId], references: [id])
+
+  @@index([organizationId])
+  @@index([patientId])
+  @@index([scheduledDate])
+  @@index([serviceId])
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  CANCELED
+  COMPLETED
+}
+
+model MedicalRecord {
+  id                  String              @id @default(uuid())
+  patientId           String
+  organizationId      String
+  professionalId      String
+  appointmentId       String?             @unique
+  recordType          MedicalRecordType
+  recordDate          DateTime            @default(now())
+  chiefComplaint      String?
+  clinicalHistory     String?
+  physicalExamination String?
+  diagnosis           Json? // Array de diagnósticos
+  treatment           String?
+  prescriptions       Json? // Array de prescrições
+  vitalSigns          Json? // Objeto com sinais vitais
+  labResults          Json? // Array de resultados de exames
+  attachments         Json? // Array de anexos
+  followUpPlan        Json? // Plano de acompanhamento
+  notes               String?
+  evolution           Json? // Array de evoluções
+  permissions         Json? // Configurações de permissões
+  signature           Json? // Assinatura do profissional
+  status              MedicalRecordStatus @default(DRAFT)
+  isDeleted           Boolean             @default(false)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  patient      Patient      @relation(fields: [patientId], references: [id])
+  professional User         @relation(fields: [professionalId], references: [id])
+  appointment  Appointment? @relation(fields: [appointmentId], references: [id])
+
+  @@index([patientId])
+  @@index([organizationId])
+  @@index([professionalId])
+}
+
+enum MedicalRecordType {
+  CONSULTATION
+  EXAM
+  PROCEDURE
+  NOTE
+  INITIAL_ASSESSMENT
+}
+
+enum MedicalRecordStatus {
+  DRAFT
+  SIGNED
+  AMENDED
+}
+
+model ChatbotSession {
+  id               String    @id @default(uuid())
+  organizationId   String
+  patientId        String?
+  startedAt        DateTime  @default(now())
+  endedAt          DateTime?
+  conversationFlow Json?
+  metadata         Json?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+// Modelos para gerenciamento de serviços
+
+model Service {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  description    String
+  duration       Int      // duração em minutos
+  price          Float
+  active         Boolean  @default(true)
+  categoryId     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  category       Category?    @relation(fields: [categoryId], references: [id])
+  professionals  ServiceProfessional[]
+  availabilities ServiceAvailability[]
+  appointments   Appointment[]
+
+  @@index([organizationId])
+  @@index([categoryId])
+}
+
+model Category {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  color          String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  services     Service[]
+
+  @@index([organizationId])
+}
+
+model Professional {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  organizationId String
+  specialization String?
+  bio            String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user          User                 @relation(fields: [userId], references: [id])
+  organization  Organization         @relation(fields: [organizationId], references: [id])
+  services      ServiceProfessional[]
+  availabilities ProfessionalAvailability[]
+
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model ServiceProfessional {
+  id             String   @id @default(uuid())
+  serviceId      String
+  professionalId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  service      Service     @relation(fields: [serviceId], references: [id])
+  professional Professional @relation(fields: [professionalId], references: [id])
+
+  @@unique([serviceId, professionalId])
+  @@index([serviceId])
+  @@index([professionalId])
+}
+
+model ServiceAvailability {
+  id        String   @id @default(uuid())
+  serviceId String
+  dayOfWeek Int      // 0-6 (domingo-sábado)
+  startTime String   // formato "HH:MM"
+  endTime   String   // formato "HH:MM"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@index([serviceId])
+}
+
+model ProfessionalAvailability {
+  id             String   @id @default(uuid())
+  professionalId String
+  dayOfWeek      Int      // 0-6 (domingo-sábado)
+  startTime      String   // formato "HH:MM"
+  endTime        String   // formato "HH:MM"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  professional Professional @relation(fields: [professionalId], references: [id])
+
+  @@index([professionalId])
+}
